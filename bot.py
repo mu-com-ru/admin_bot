@@ -103,10 +103,15 @@ async def priority_message(message: types.Message):
 			for i in data:
 				send_request(conf.requests['alert_complite'] + str(i[0]))
 		else:
-			await message.answer("Нет сообщений")	
+			await message.answer("Нет сообщений")
 	except Exception as e:
 		await message.answer('Ошибка ' + str(e))
 	close_con_cur()
+
+@dp.message_handler(commands=['help'])
+async def help(message: types.Message):
+	message.answer('Commands: start stop today priority(0 1 2)')
+
 
 @dp.message_handler()
 async def wtf(message: types.Message):
