@@ -108,6 +108,10 @@ async def priority_message(message: types.Message):
 		await message.answer('Ошибка ' + str(e))
 	close_con_cur()
 
+@dp.message_handler(commands=['help'])
+async def help(message: types.Message):
+	message.answer('Commands: start stop today priority(0 1 2)')
+	
 @dp.message_handler()
 async def wtf(message: types.Message):
 	print(message.text)
