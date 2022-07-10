@@ -43,7 +43,7 @@ def output_format(data):
 	for i in data:
 		output += ' '.join(i) + '\n'
 	return output
-	
+
 async def admin_alert(data):
 	for i in data[0]:
 		print(type(i))
@@ -108,9 +108,23 @@ async def priority_message(message: types.Message):
 		await message.answer('Ошибка ' + str(e))
 	close_con_cur()
 
+@dp.message_handler(commands=['all'])
+async def all_incomplete(message: types.Message):
+	get_con_cur()
+	try:
+		data = send_request(conf.requests['all_incomplete'])
+		if data:
+			await message.answer(output_format(data))
+			for i in data:
+				send_request(conf.requests['alert_complite'] + str(i[0]))
+		else:
+			await message.answer("Нет сообщений")
+	except Exception as e:
+		await message.answer("Ошибка " + str(e))
+
 @dp.message_handler(commands=['help'])
 async def help(message: types.Message):
-	message.answer('Commands: start stop today priority(0 1 2)')
+	await message.answer('Commands: start stop today priority(0 1 2)')
 	
 @dp.message_handler()
 async def wtf(message: types.Message):
