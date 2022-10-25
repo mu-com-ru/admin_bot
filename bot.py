@@ -6,8 +6,8 @@ import conf
 import asyncio
 import datetime
 
-logging.basicConfig(level=logging.INFO)
 
+logging.basicConfig(level=logging.INFO)
 bot = Bot(token=conf.TOKEN)
 dp = Dispatcher(bot)
 check_event = False
@@ -32,6 +32,20 @@ async def check_base():
             connect.db.commit()
         del connect
         await asyncio.sleep(60)
+
+
+def get_kb():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    start = types.KeyboardButton('/start')
+    stop = types.KeyboardButton('/stop')
+    today = types.KeyboardButton('/today')
+    priority_1 = types.KeyboardButton('/priority 1')
+    priority_2 = types.KeyboardButton('/priority 2')
+    priority_3 = types.KeyboardButton('/priority 3')
+    help = types.KeyboardButton('/help')
+    all = types.KeyboardButton('/all')
+    kb.add(start, stop, today, priority_1, priority_2, priority_3, help, all)
+    return kb
 
 
 class Connection:
@@ -63,15 +77,19 @@ async def start_check(message: types.Message):
     check_event = True
     print('Работаю!')
     asyncio.create_task(check_base())
-    await message.answer('Работаю!')
+    kb = get_kb()
+    await message.answer('Работаю!', reply_markup=kb)
 
 
 @dp.message_handler(commands=['stop'])
 async def stop_check(message: types.Message):
     global check_event
-    check_event = False
-    print('Встал!')
-    await message.answer('Встал!')
+    if check_event:
+        check_event = False
+        print('Встал!')
+        await message.answer('Встал!')
+    else:
+        await message.answer('Давненько стою!')
 
 
 @dp.message_handler(commands=['today'])
@@ -118,8 +136,8 @@ async def all_incomplete(message: types.Message):
 
 @dp.message_handler(commands=['help'])
 async def help(message: types.Message):
-    message.answer('Commands: start stop today priority(0 1 2)')
-    
+    await message.answer('Commands: start stop today priority(0 1 2)')
+
 
 @dp.message_handler()
 async def wtf(message: types.Message):
