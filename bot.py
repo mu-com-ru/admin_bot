@@ -10,7 +10,10 @@ import datetime
 logging.basicConfig(level=logging.INFO)
 bot = Bot(token=conf.TOKEN)
 dp = Dispatcher(bot)
-check_event = False
+
+class Guide:
+    check_event = False
+    users_connect = []
 
 
 async def admin_alert(data):
@@ -20,8 +23,7 @@ async def admin_alert(data):
 
 
 async def check_base():
-    global check_event
-    while check_event:
+    while Guide.check_event:
         connect = Connection()
         query_data = connect.db.query(
             Message).filter_by(priority=2, complete=0)
@@ -62,7 +64,6 @@ async def split_answer(data: str, message: types.Message):
     data = '\n'.join(map(str, data))
     str_len = len(data)
     count_mes =  str_len // ((str_len // 4100) + 1)
-    print(data, str_len, count_mes)
     queue = [data[i:i+count_mes] for i in range(0, str_len, count_mes)]
     for elem in queue:
         await message.answer(elem)
@@ -70,11 +71,10 @@ async def split_answer(data: str, message: types.Message):
 
 @dp.message_handler(commands=['start'])
 async def start_check(message: types.Message):
-    global check_event
-    if check_event:
+    if Guide.check_event:
         await message.answer('Уже работаю')
         return
-    check_event = True
+    Guide.check_event = True
     print('Работаю!')
     asyncio.create_task(check_base())
     kb = get_kb()
@@ -83,9 +83,8 @@ async def start_check(message: types.Message):
 
 @dp.message_handler(commands=['stop'])
 async def stop_check(message: types.Message):
-    global check_event
-    if check_event:
-        check_event = False
+    if Guide.check_event:
+        Guide.check_event = False
         print('Встал!')
         await message.answer('Встал!')
     else:
@@ -94,18 +93,27 @@ async def stop_check(message: types.Message):
 
 @dp.message_handler(commands=['today'])
 async def today_message(message: types.Message):
-    connect = Connection()
-    data = connect.db.query(Message).filter(
-        cast(Message.created, Date) == datetime.datetime.today().date()).all()
-    if data:
-        await split_answer(data, message)
-    else:
-        await message.answer('Нет сообщений')
-
+    try:
+        if message.chat.id in Guide.users_connect:
+            return
+        Guide.users_connect.append(message.chat.id)
+        connect = Connection()
+        data = connect.db.query(Message).filter(
+            cast(Message.created, Date) == datetime.datetime.today().date()).all()
+        if data:
+            await split_answer(data, message)
+        else:
+            await message.answer('Нет сообщений')
+        Guide.users_connect.remove(message.chat.id)
+    except Exception as e:
+        await message.answer('Ошибка ' + str(e))
 
 @dp.message_handler(commands=['priority'])
 async def priority_message(message: types.Message):
     try:
+        if message.chat.id in Guide.users_connect:
+            return
+        Guide.users_connect.append(message.chat.id)
         connect = Connection()
         priority = message.text.split()[1]
         query_data = connect.db.query(Message).filter_by(
@@ -117,6 +125,7 @@ async def priority_message(message: types.Message):
             connect.db.commit()
         else:
             await message.answer("Нет сообщений")
+        Guide.users_connect.remove(message.chat.id)
     except Exception as e:
         await message.answer('Ошибка ' + str(e))
 
@@ -124,12 +133,16 @@ async def priority_message(message: types.Message):
 @dp.message_handler(commands=['all'])
 async def all_incomplete(message: types.Message):
     try:
+        if message.chat.id in Guide.users_connect:
+            return
+        Guide.users_connect.append(message.chat.id)
         connect = Connection()
         data = connect.db.query(Message).filter_by(complete=0).all()
         if data:
             await split_answer(data, message)
         else:
             await message.answer("Нет сообщений")
+        Guide.users_connect.remove(message.chat.id)
     except Exception as e:
         await message.answer("Ошибка " + str(e))
 
