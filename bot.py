@@ -1,4 +1,5 @@
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.utils.exceptions import ChatNotFound
 from database import Message, Priority, Soft, SessionLocal
 from sqlalchemy import Date, cast
 import logging
@@ -12,28 +13,32 @@ bot = Bot(token=conf.TOKEN)
 dp = Dispatcher(bot)
 
 class Guide:
-    check_event = False
+    task = None
     users_connect = []
 
 
 async def admin_alert(data):
     data = '\n'.join(map(str, data))
     for id in conf.admin_id:
-        await bot.send_message(id, data)
-
+        try:
+            await bot.send_message(id, data)
+        except ChatNotFound as e:
+            print(e)
 
 async def check_base():
-    while Guide.check_event:
+    try:
         connect = Connection()
-        query_data = connect.db.query(
-            Message).filter_by(priority=2, complete=0)
-        data = query_data.all()
-        if data:
-            await admin_alert(data)
-            query_data.update({'complete': 1})
-            connect.db.commit()
-        del connect
-        await asyncio.sleep(60)
+        while Guide.task is not None:
+            query_data = connect.db.query(
+                Message).filter_by(priority=2, complete=0)
+            data = query_data.all()
+            if data:
+                await admin_alert(data)
+                query_data.update({'complete': 1})
+                connect.db.commit()
+            await asyncio.sleep(10)
+    except Exception as e:
+        print(e, type(e))
 
 
 def get_kb():
@@ -51,17 +56,26 @@ def get_kb():
 
 
 class Connection:
+    connect = None
+
     def __init__(self):
-        self.db = SessionLocal()
-        print('Open connection')
+        if Connection.connect is None:
+            self.db = SessionLocal()
+            Connection.connect = self.db
+            print('Open connection')
+        else:
+            self.db = Connection.connect
 
     def __del__(self):
+        Connection.connect = None
         self.db.close()
         print('Close connextion')
 
 
 async def split_answer(data: str, message: types.Message):
-    data = '\n'.join(map(str, data))
+    def func(x):
+        return f'[{x[1]}] {x[0]}'
+    data = '\n'.join(map(func, data))
     str_len = len(data)
     count_mes =  str_len // ((str_len // 4100) + 1)
     queue = [data[i:i+count_mes] for i in range(0, str_len, count_mes)]
@@ -71,20 +85,20 @@ async def split_answer(data: str, message: types.Message):
 
 @dp.message_handler(commands=['start'])
 async def start_check(message: types.Message):
-    if Guide.check_event:
+    if Guide.task is not None:
         await message.answer('Уже работаю')
         return
-    Guide.check_event = True
+    Guide.task = asyncio.ensure_future(check_base())
     print('Работаю!')
-    asyncio.create_task(check_base())
     kb = get_kb()
     await message.answer('Работаю!', reply_markup=kb)
 
 
 @dp.message_handler(commands=['stop'])
 async def stop_check(message: types.Message):
-    if Guide.check_event:
-        Guide.check_event = False
+    if Guide.task is not None:
+        Guide.task.cancel()
+        Guide.task = None
         print('Встал!')
         await message.answer('Встал!')
     else:
@@ -98,8 +112,10 @@ async def today_message(message: types.Message):
             return
         Guide.users_connect.append(message.chat.id)
         connect = Connection()
-        data = connect.db.query(Message).filter(
-            cast(Message.created, Date) == datetime.datetime.today().date()).all()
+        data = connect.db.query(Message).join(Message.soft_fk).add_entity(
+            Soft).from_self().filter(
+                cast(Message.created,
+                Date) == datetime.datetime.today().date()).all()
         if data:
             await split_answer(data, message)
         else:
@@ -116,8 +132,9 @@ async def priority_message(message: types.Message):
         Guide.users_connect.append(message.chat.id)
         connect = Connection()
         priority = message.text.split()[1]
-        query_data = connect.db.query(Message).filter_by(
-            priority=priority, complete=0)
+        query_data = connect.db.query(Message).join(
+            Message.soft_fk).add_entity(Soft).from_self().filter_by(
+                priority=priority, complete=0)
         data = query_data.all()
         if data:
             await split_answer(data, message)
@@ -137,7 +154,8 @@ async def all_incomplete(message: types.Message):
             return
         Guide.users_connect.append(message.chat.id)
         connect = Connection()
-        data = connect.db.query(Message).filter_by(complete=0).all()
+        data = connect.db.query(Message).join(Message.soft_fk).add_entity(
+            Soft).from_self().filter_by(complete=0).all()
         if data:
             await split_answer(data, message)
         else:
