@@ -2,6 +2,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.utils.exceptions import ChatNotFound
 from database import Message, Priority, Soft, SessionLocal
 from sqlalchemy import Date, cast
+from utils import alert_format
 import logging
 import conf
 import asyncio
@@ -18,7 +19,8 @@ class Guide:
 
 
 async def admin_alert(data):
-    data = '\n'.join(map(str, data))
+    data = alert_format(data)
+    print(data)
     for id in conf.admin_id:
         try:
             await bot.send_message(id, data)
@@ -29,9 +31,10 @@ async def check_base():
     try:
         connect = Connection()
         while Guide.task is not None:
-            query_data = connect.db.query(
-                Message).filter_by(priority=2, complete=0)
-            data = query_data.all()
+            query_data = connect.db.query(Message).filter_by(
+                    priority=2, complete=0)
+            data = query_data.join(
+                Message.soft_fk).add_entity(Soft).from_self().all()
             if data:
                 await admin_alert(data)
                 query_data.update({'complete': 1})
@@ -73,9 +76,7 @@ class Connection:
 
 
 async def split_answer(data: str, message: types.Message):
-    def func(x):
-        return f'[{x[1]}] {x[0]}'
-    data = '\n'.join(map(func, data))
+    data = alert_format(data)
     str_len = len(data)
     count_mes =  str_len // ((str_len // 4100) + 1)
     queue = [data[i:i+count_mes] for i in range(0, str_len, count_mes)]
