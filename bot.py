@@ -2,7 +2,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.utils.exceptions import ChatNotFound
 from database import Message, Priority, Soft, SessionLocal
 from sqlalchemy import Date, cast
-from utils import alert_format
+from utils import Guide, alert_format, spam_protect
 import logging
 import conf
 import asyncio
@@ -13,9 +13,7 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=conf.TOKEN)
 dp = Dispatcher(bot)
 
-class Guide:
-    task = None
-    users_connect = []
+
 
 
 async def admin_alert(data):
@@ -85,6 +83,7 @@ async def split_answer(data: str, message: types.Message):
 
 
 @dp.message_handler(commands=['start'])
+@spam_protect
 async def start_check(message: types.Message):
     if Guide.task is not None:
         await message.answer('Уже работаю')
@@ -107,11 +106,9 @@ async def stop_check(message: types.Message):
 
 
 @dp.message_handler(commands=['today'])
+@spam_protect
 async def today_message(message: types.Message):
     try:
-        if message.chat.id in Guide.users_connect:
-            return
-        Guide.users_connect.append(message.chat.id)
         connect = Connection()
         data = connect.db.query(Message).join(Message.soft_fk).add_entity(
             Soft).from_self().filter(
@@ -121,16 +118,13 @@ async def today_message(message: types.Message):
             await split_answer(data, message)
         else:
             await message.answer('Нет сообщений')
-        Guide.users_connect.remove(message.chat.id)
     except Exception as e:
-        await message.answer('Ошибка ' + str(e))
+        await message.answer(f'Ошибка {e} {type(e)}')
 
 @dp.message_handler(commands=['priority'])
+@spam_protect
 async def priority_message(message: types.Message):
     try:
-        if message.chat.id in Guide.users_connect:
-            return
-        Guide.users_connect.append(message.chat.id)
         connect = Connection()
         priority = message.text.split()[1]
         query_data = connect.db.query(Message).join(
@@ -143,17 +137,14 @@ async def priority_message(message: types.Message):
             connect.db.commit()
         else:
             await message.answer("Нет сообщений")
-        Guide.users_connect.remove(message.chat.id)
     except Exception as e:
-        await message.answer('Ошибка ' + str(e))
+        await message.answer(f'Ошибка {e} {type(e)}')
 
 
 @dp.message_handler(commands=['all'])
+@spam_protect
 async def all_incomplete(message: types.Message):
     try:
-        if message.chat.id in Guide.users_connect:
-            return
-        Guide.users_connect.append(message.chat.id)
         connect = Connection()
         data = connect.db.query(Message).join(Message.soft_fk).add_entity(
             Soft).from_self().filter_by(complete=0).all()
@@ -161,9 +152,8 @@ async def all_incomplete(message: types.Message):
             await split_answer(data, message)
         else:
             await message.answer("Нет сообщений")
-        Guide.users_connect.remove(message.chat.id)
     except Exception as e:
-        await message.answer("Ошибка " + str(e))
+        await message.answer(f'Ошибка {e} {type(e)}')
 
 
 @dp.message_handler(commands=['help'])
