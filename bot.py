@@ -1,8 +1,8 @@
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.utils.exceptions import ChatNotFound
 from database import Message, Priority, Soft, SessionLocal
-from sqlalchemy import Date, cast
+from aiogram import Bot, Dispatcher, executor, types
 from utils import Guide, alert_format, spam_protect
+from aiogram.utils.exceptions import ChatNotFound
+from sqlalchemy import Date, cast
 import logging
 import conf
 import asyncio
@@ -14,8 +14,6 @@ bot = Bot(token=conf.TOKEN)
 dp = Dispatcher(bot)
 
 
-
-
 async def admin_alert(data):
     data = alert_format(data)
     print(data)
@@ -24,6 +22,7 @@ async def admin_alert(data):
             await bot.send_message(id, data)
         except ChatNotFound as e:
             print(e)
+
 
 async def check_base():
     try:
