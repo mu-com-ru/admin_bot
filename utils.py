@@ -26,8 +26,8 @@ def alert_format(data):
 
 def spam_protect(func):
     async def protect(*args):
-        print(Guide._Guide__users_connect)
         if not Guide.contains_id(args[0].chat.id):
+            print(args[0].chat.id)
             Guide.add(args[0].chat.id)
             await func(args[0])
             await asyncio.sleep(0.5)
