@@ -18,12 +18,6 @@ class Guide:
         return id in cls.__users_connect
 
 
-def alert_format(data):
-    def func(x):
-        return f'[{x[1]}] {x[0]}'
-    return '\n'.join(map(func, data))
-
-
 def spam_protect(func):
     async def protect(*args):
         if not Guide.contains_id(args[0].chat.id):

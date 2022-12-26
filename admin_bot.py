@@ -1,12 +1,12 @@
 from database import Message, Priority, Soft, SessionLocal
 from aiogram import Bot, Dispatcher, executor, types
-from utils import Guide, alert_format, spam_protect
+from utils import Guide, spam_protect
 from aiogram.utils.exceptions import ChatNotFound
 from sqlalchemy import Date, cast
+import datetime
+import asyncio
 import logging
 import conf
-import asyncio
-import datetime
 
 
 logging.basicConfig(level=logging.INFO)
@@ -14,14 +14,35 @@ bot = Bot(token=conf.TOKEN)
 dp = Dispatcher(bot)
 
 
-async def admin_alert(data):
-    data = alert_format(data)
-    print(data)
-    for id in conf.admin_id:
-        try:
-            await bot.send_message(id, data)
-        except ChatNotFound as e:
-            print(e)
+class SendMessage:
+    @staticmethod
+    def alert_format(data):
+        def func(x):
+            return f'[{x[1]}] {x[0]}'
+        return '\n'.join(map(func, data))
+
+    @classmethod
+    def split_message(cls, data):
+        str_len = len(data)
+        count_mes = str_len // ((str_len // 4100) + 1)
+        return [data[i:i+count_mes] for i in range(0, str_len, count_mes)]
+
+    @classmethod
+    async def admin_alert(cls, data):
+        queue = cls.split_message(cls.alert_format(data))
+        print(data)
+        for id in conf.admin_id:
+            try:
+                for elem in queue:
+                    await bot.send_message(id, elem)
+            except ChatNotFound as e:
+                print(e)
+
+    @classmethod
+    async def split_answer(cls, data: str, message: types.Message):
+        queue = cls.split_message(cls.alert_format(data))
+        for elem in queue:
+            await message.answer(elem)
 
 
 async def check_base():
@@ -33,7 +54,7 @@ async def check_base():
             data = query_data.join(
                 Message.soft_fk).add_entity(Soft).from_self().all()
             if data:
-                await admin_alert(data)
+                await SendMessage.admin_alert(data)
                 query_data.update({'complete': 1})
                 connect.db.commit()
             await asyncio.sleep(10)
@@ -72,13 +93,7 @@ class Connection:
         print('Close connextion')
 
 
-async def split_answer(data: str, message: types.Message):
-    data = alert_format(data)
-    str_len = len(data)
-    count_mes =  str_len // ((str_len // 4100) + 1)
-    queue = [data[i:i+count_mes] for i in range(0, str_len, count_mes)]
-    for elem in queue:
-        await message.answer(elem)
+
 
 
 @dp.message_handler(commands=['start'])
@@ -114,7 +129,7 @@ async def today_message(message: types.Message):
                 cast(Message.created,
                 Date) == datetime.datetime.today().date()).all()
         if data:
-            await split_answer(data, message)
+            await SendMessage.split_answer(data, message)
         else:
             await message.answer('Нет сообщений')
     except Exception as e:
@@ -131,8 +146,9 @@ async def priority_message(message: types.Message):
                 priority=priority, complete=0)
         data = query_data.all()
         if data:
-            await split_answer(data, message)
-            query_data.update({'complete': 1})
+            await SendMessage.split_answer(data, message)
+            connect.db.query(Message).filter_by(
+                priority=priority, complete=0).update({'complete': 1})
             connect.db.commit()
         else:
             await message.answer("Нет сообщений")
@@ -148,7 +164,7 @@ async def all_incomplete(message: types.Message):
         data = connect.db.query(Message).join(Message.soft_fk).add_entity(
             Soft).from_self().filter_by(complete=0).all()
         if data:
-            await split_answer(data, message)
+            await SendMessage.split_answer(data, message)
         else:
             await message.answer("Нет сообщений")
     except Exception as e:
